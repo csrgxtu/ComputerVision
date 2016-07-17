@@ -9,7 +9,7 @@ from PIL import Image
 from pylab import *
 
 # read image 2 array
-im = array(Image.open('../data/data/empire.jpg').convert('L'))
+im = array(Image.open('/home/archer/Downloads/1051429334.jpg').convert('L'))
 
 # create a new figure
 figure()
