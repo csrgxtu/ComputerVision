@@ -96,6 +96,8 @@ def denoise(im, U_init, tolerance=0.1, tau=0.125, tv_weigth=100):
 
         return U, im-U
 
+from scipy.ndimage import filters
+
 def compute_harris_response(im, sigma=3):
     """ compute the Harris corner detector response function
         for each pixel in a graylevel image. """
@@ -143,8 +145,7 @@ def get_harris_points(harrisim, min_dist=10, threshhold=0.1):
     for i in index:
         if allowed_locations[coords[i, 0], coords[i, 1]] == 1:
             filtered_coords.append(coords[i])
-            allowed_locations[(coords[i,0] - min_dist):(coords[i, 1] + min_dist),
-                (coords)] = 0
+            allowed_locations[(coords[i,0] - min_dist):(coords[i, 0] + min_dist), (coords[i, 1] - min_dist):(coords[i, 1] + min_dist)] = 0
 
     return filtered_coords
 
@@ -152,7 +153,7 @@ def plot_harris_points(image, filtered_coords):
     """ plots corners found in image"""
     figure()
     gray()
-    imshow(iamge)
+    imshow(image)
     plot([p[1] for p in filtered_coords], [p[0] for p in filtered_coords], '*')
     axis('off')
     show()
