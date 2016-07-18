@@ -157,3 +157,124 @@ def plot_harris_points(image, filtered_coords):
     plot([p[1] for p in filtered_coords], [p[0] for p in filtered_coords], '*')
     axis('off')
     show()
+
+def normalize(points):
+    """ Normalize a collection of points in haomogeneous coordinates so that
+        last row = 1. """
+    for row in points:
+        row /= points[-1]
+
+    return points
+
+def make_homog(points):
+    """ convert a set of points (dim*n array) to haomogeneous coordinates"""
+    return vstack((points, ones((1, points, shape[1]))))
+
+def H_from_points(fp, tp):
+    """ find homography H, such that fp is mapped to tp using the linear
+        DLT method, points are conditioned automatically"""
+
+    if fp.shape != tp.shape:
+        raise RuntimeError('number of points do not match')
+
+    # condition points (important for numberical reasons)
+    # -- from points --
+    m = mean(fp[:2], axis=1)
+    maxstd = max(std(fp[:2], axis=1)) + 1e-9
+    C1 = diag([1/maxstd, 1/maxstd, 1])
+    C1[0][2] = -m[0] / maxstd
+    C1[1][2] = -m[1] / maxstd
+    fp = dot(C1, fp)
+
+    # -- to points --
+    m = mean(tp[:2], axis=1)
+    maxstd = max(std(tp[:2], axis=1)) + 1e-9
+    C2 = diag([1/maxstd, 1/maxstd, 1])
+    C2[0][2] = -m[0] / maxstd
+    C2[1][2] = -m[1] / maxstd
+    tp = dot(C2, tp)
+
+    # create matrix for linear method, 2 rows for each correspondence pair
+    nbr_correspondences = fp.shape[1]
+    A = zeros((2 * nbr_correspondences, 9))
+    for i in range(nbr_correspondences):
+        A[2 * i] = [-fp[0][i], -fp[1][i], -1, 0, 0, 0, tp[0][i] * fp[0][i], tp[0][i] * fp[1][i], tp[0][i]]
+        A[2 * i + 1] = [0, 0, 0, -fp[0][i], -fp[1][i], -1, tp[1][i] * fp[0][i], tp[1][i] * fp[1][i], tp[1][i]]
+
+    U, S, V = linalg.svd(A)
+    H = V[8].reshape((3, 3))
+
+    # decondition
+    H = dot(linalg.inv(C2), dot(H, C1))
+
+    # normalize and return
+    return H / H[2, 2]
+
+def Haffine_from_points(fp, tp):
+    """ find H, affine transformation, such that tp is affine transf of fp"""
+
+    if fp.shape != tp.shape:
+        raise RuntimeError('number of points do not match')
+
+    # condition points (important for numberical reasons)
+    # -- from points --
+    m = mean(fp[:2], axis=1)
+    maxstd = max(std(fp[:2], axis=1)) + 1e-9
+    C1 = diag([1/maxstd, 1/maxstd, 1])
+    C1[0][2] = -m[0] / maxstd
+    C1[1][2] = -m[1] / maxstd
+    fp_cond = dot(C1, fp)
+
+    # -- to points --
+    m = mean(tp[:2], axis=1)
+    C2 = C1.copy() # must use same scaling for both point sets
+    C2 = diag([1/maxstd, 1/maxstd, 1])
+    C2[0][2] = -m[0] / maxstd
+    C2[1][2] = -m[1] / maxstd
+    tp_cond = dot(C2, tp)
+
+    # conditioned points have mean zero, so translations is zeros
+    A = concatenate((fp_cond[:2], tp_cond[:2]), axis = 0)
+    U, S, V = linalg.svd(A.T)
+
+    # create B and C matrices as Hartley-Zisserman (2:nd ed) p 130
+    tmp = V[:2].T
+    B = tmp[:2]
+    C = tmp[2:4]
+
+    tmp2 = concatenate((dot(C, linalg.pinv(B)), zeros((2, 1))), axis=1)
+    H = vstack((tmp2, [0, 0, 1]))
+
+    # decondition
+    H = dot(linalg.inv(C2), dot(H, C1))
+
+    return H / H[2,2]
+
+def image_in_image(im1, im2, tp):
+    """ put im1 in im2 with an affine transformation such that corners are
+    a   as close to tp as possible. tp are homogeneous and counterclockwise
+    from top left."""
+
+    # points to warp from
+    m, n = im1.shape[:2]
+    fp = array([[0, m, m, 0], [0, 0, n, n], [1, 1, 1, 1]])
+
+    ＃ compute affine transform and apply
+    H = Haffine_from_points(tp, fp)
+    im1_t = ndimage.affine_transform(im1, H[:2, :2], (H[0, 2], H[1, 2]), im2.shape[:2])
+    alpha = (im1_t > 0)
+
+    return (1 - alpha) * im2 + alpha * im1_t
+
+def alpha_for_triangle(points, m, n):
+    """ create alpha map of size (m, n) for a triangle with corners defined by points
+        given in normalized homogeneous coordinates)"""
+
+    alpha = zeros((m, n))
+    for i in range(min(points[0]), max(points[0])):
+        for j in range(min(points[1]), max(points[1])):
+            x = linalg.solve(points, [i, j, 1])
+            if min(x) > 0: # all coefficients positive
+                alpha[i, j] = 1
+
+    return alpha
