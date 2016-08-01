@@ -3,7 +3,7 @@
 #
 # Author: Archer Reilly
 # Desc: 按照颜色找出物体blob
-# File: FindBlobs.py
+# File: FindLines.py
 # Date: 30/July/2016
 #
 from SimpleCV import Color, Image

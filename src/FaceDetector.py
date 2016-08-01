@@ -15,7 +15,7 @@ while disp.isNotDone():
     img = cam.getImage()
 
     # Look for a face
-    faces = img.findHaarFeatures('face.xml')
+    faces = img.findHaarFeatures('mouth.xml')
 
     if faces is not None and len(faces) > 0:
         # Get the largest face
